@@ -1,0 +1,71 @@
+alias physicalsp S0;
+physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+
+alias syscallno S1;
+syscallno=[physicalsp-1];
+
+alias arg1 S2;			//word to write
+arg1=[physicalsp-3];
+
+alias arg2 S3;			//file descriptor
+arg2=[physicalsp-4];
+
+alias i S4;
+
+
+if(syscallno==5) then			//Write syscall
+	if(arg2<0||arg2>7) then
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	arg2=15+(arg2*2);
+	alias processid S5;
+	processid=(PTBR-1024)/8;
+	alias pcb S6;
+	pcb=READY_LIST+(processid*32);
+	if([pcb+arg2]==-1) then			//checking if PPT entry  is valid
+		print "INVALID FDESCRIPTOR";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	alias opentableindex S7;
+	alias lseek S8;
+	opentableindex=[pcb+arg2]*2;		//finding pointer of file system wide open file table
+	lseek=[pcb+arg2+1];
+	alias fileindex S9;
+	fileindex=[FILE_TABLE+opentableindex];	//FAT entry index
+	alias basicblock S10;
+	basicblock=[FAT+(fileindex*8)+2];	//finding basic block from FAT
+	load(1,basicblock);
+	alias datablock S11;
+	datablock=[SCRATCHPAD+(lseek/512)];	//finding datablock using LSeek
+	if(datablock==-1) then			//if no datablock find a free block in disk
+		i=24;
+		while(i<448&&[DISK_LIST+i]!=0) do
+			i=i+1;
+		endwhile;
+		if(i==448) then
+			print "NO BLOCK TO WRITE";
+			[physicalsp-2]=-1;
+			ireturn;
+		endif;
+		[DISK_LIST+i]=1;		//marking DiskFreeList
+		datablock=i;
+		[SCRATCHPAD+(lseek/512)]=i;	
+		store(1,basicblock);
+		[FAT+(fileindex*8)+1]=[FAT+(fileindex*8)+1]+512;	//increasing file size
+		store(5,19);
+		store(6,20);
+	endif;
+	load(1,datablock);
+	print(datablock);
+	[SCRATCHPAD+(lseek%512)]=arg1;
+	print"1";
+	store(1,datablock);
+	print"2";	
+	[pcb+arg2+1]=lseek+1;			//incrementing lseek
+	print"write done";	
+	[physicalsp-2]=0;
+	print"write done";
+	ireturn;
+endif;

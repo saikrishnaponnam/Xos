@@ -1,0 +1,137 @@
+alias physicalsp S0;
+physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+
+alias syscall S1;
+syscall=[physicalsp-1];
+
+alias i S2;
+i=0;
+
+if(syscall==10) then		//EXIT syscall
+	alias pid S3;
+	pid=(PTBR-1024)/8;
+	while(i<32) do
+		if([READY_LIST+i*32+1]==100+pid) then
+			[READY_LIST+i*32+1]=1;
+		endif;
+		i=i+1;
+	endwhile;
+	i=0;
+	while(i<32) do
+		if([READY_LIST+(i*32)+1]==1) then
+			break;
+		endif;
+		i=i+1;
+	endwhile;
+	if(i==32) then
+		print("exit");
+		halt;
+	endif;
+	alias pcb S4;
+	pcb=READY_LIST+(pid*32);
+	alias temp S5;
+	i=15;
+	while(i<31) do				//closing files opened by process
+		if([pcb+i]!=-1) then
+			temp=FILE_TABLE+([pcb+i]*2);
+			[temp+1]=[temp+1]-1;
+			if([temp+1]==0) then
+				[temp]=-1;
+			endif;	
+			[pcb+i]=-1;
+			[pcb+i+1]=-1;
+		endif;
+		i=i+2;		
+	endwhile;
+	[pcb+1]=0;				//state of current process to 0.
+	i=0;
+	while(i<8) do				//clearing PTBR
+		if([PTBR+i+1]=="01"||[PTBR+i+1]=="11") then
+			[MEM_LIST+[PTBR+i]]=[MEM_LIST+[PTBR+i]]-1;
+			[PTBR+i]=-1;
+			[PTBR+i+1]="00";
+		else
+			if([PTBR+i+1]=="00"&&[PTBR+i]>448) then
+				[DISK_LIST+[PTBR+i]]=[DISK_LIST+[PTBR+i]]-1;
+			endif;
+		endif;
+		i=i+2;
+	endwhile;
+	store(6,20);
+endif;	
+
+if(syscall==13) then				//wait 
+	alias waitpid S3;
+	waitpid=[physicalsp-3];
+	alias waitpcb S4;
+	waitpcb=READY_LIST+(waitpid*32);
+	if([waitpcb+1]==2||[waitpcb+1]==0) then
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	alias pid S5;
+	pid=(PTBR-1024)/8;
+	alias pcb S6;
+	pcb=READY_LIST+32*pid;
+	[pcb+1]=100+waitpid;
+	[pcb+2]=BP;
+	[pcb+3]=SP;
+	[pcb+4]=[physicalsp];
+	[pcb+5]=PTBR;
+	[pcb+6]=PTLR;
+	[pcb+7]=R0;
+	[pcb+8]=R1;
+	[pcb+9]=R2;
+	[pcb+10]=R3;
+	[pcb+11]=R4;
+	[pcb+12]=R5;
+	[pcb+13]=R6;
+	[pcb+14]=R7;
+endif;
+
+if(syscall==10||syscall==13) then
+	alias pid S3;
+	pid=(PTBR-1024)/8;
+	alias pcb S4;
+	pcb=READY_LIST+(pid*32);
+	i=pcb+32;
+	if(i>2559) then
+		i=READY_LIST;
+	endif;
+	while([i+1]!=1) do
+		i=i+32;
+		if(i>2559) then
+			i=READY_LIST;
+		endif;
+	endwhile;
+	[i+1]=2;
+	BP=[i+2];
+	SP=[i+3];
+	PTBR=[i+5];
+	PTLR=[i+6];
+	R0=[i+7];
+	R1=[i+8];
+	R2=[i+9];
+	R3=[i+10];
+	R4=[i+11];
+	R5=[i+12];
+	R6=[i+13];
+	R7=[i+14];
+	SP=SP+1;
+	physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);	
+	[physicalsp]=[i+4];
+	ireturn;
+endif;
+
+if(syscall==14) then					//signal
+	alias pid S3;
+	pid=(PTBR-1024)/8;
+	while(i<32) do
+		if([READY_LIST+i*32+1]==100+pid) then
+			[READY_LIST+i*32+1]=1;
+		endif;
+		i=i+1;
+	endwhile;
+	[physicalsp-2]=0;
+	ireturn;
+endif;

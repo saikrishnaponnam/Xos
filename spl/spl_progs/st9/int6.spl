@@ -1,0 +1,120 @@
+alias physicalsp S0;
+physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+
+alias syscall S1;
+syscall=[physicalsp-1];
+
+alias arg S2;
+arg=[physicalsp-3];
+
+alias i S3;
+i=0;
+
+if(syscall==9) then					//EXEC syscall
+	i=FAT;
+	while(i<3072&&[i]!=arg) do			//checking for argument file in FAT
+		i=i+8;
+	endwhile;
+	if(i==3072) then
+		print"NO FILE";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	alias basicblock S4;
+	basicblock=[i+2];
+	load(1,basicblock);
+	alias vcb S5;
+	alias vcp S6;	
+	vcb=0;
+	i=512;
+	while(i<1024) do				//counting no. of code blocks in file
+		if([i]!=-1&&[i]!="") then
+		vcb=vcb+1;
+		endif;
+	i=i+1;
+	endwhile;
+	if(vcb>3) then
+		print"CODEBLKs >3";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	i=0;
+	vcp=0;
+	while(i<6) do					//counting no. of valid code pages in PTBR
+		if([PTBR+i]!=-1) then
+			vcp=vcp+1;
+		endif;
+	i=i+2;
+	endwhile;
+	i=4;
+	while(vcp>vcb) do				//if codepages are more than codeblocks 
+		while(i>=0&&[PTBR+i]==-1) do
+			i=i-2;
+		endwhile;
+		[PTBR+i]=-1;
+		[PTBR+i+1]="00";
+		i=i-2;
+		vcp=vcp-1;		
+	endwhile;
+	alias c S7;
+	if(vcp<vcb) then				//if codeblocks are more than codepages
+		c=vcb-vcp;
+		i=MEM_LIST;
+		while(i<1344&&c!=0) do
+			if([i]==0) then
+				c=c-1;
+			endif;
+		i=i+1;
+		endwhile;
+		if(c!=0) then
+			print "NO PAGES";
+			[physicalsp-2]=-1;
+			ireturn;
+		endif;
+		c=0;
+		i=MEM_LIST;
+		while(vcp<vcb&&i<1344) do
+			if([i]==0) then
+				[i]=1;
+			while(c<6&&[PTBR+c]!=-1) do
+				c=c+2;
+			endwhile;
+			[PTBR+c]=i-MEM_LIST;
+			[PTBR+c+1]="01";
+			vcp=vcp+1;
+			c=c+2;
+			endif;
+		i=i+1;
+		endwhile;
+	endif;
+	c=0;
+	i=512;
+	while(c<vcb&&i<1024) do				//loading codeblocks of file to pages in PTBR entry
+		if([i]!=-1&&[i]!="") then	
+		load([PTBR+c*2],[i]);
+		c=c+1;
+		endif;
+	i=i+1;
+	endwhile;
+	i=15;
+	alias pid S8;
+	pid=(PTBR-1024)/8;
+	alias pcb S9;
+	alias temp S10;
+	pcb=READY_LIST+(pid*32);			//closing files opened by process
+	while(i<31) do
+		if([pcb+i]!=-1) then
+		temp=FILE_TABLE+([pcb+i]*2);
+		[temp+1]=[temp+1]-1;
+		if([temp+1]==0) then
+			[temp]=-1;
+		endif;	
+		[pcb+i]=-1;
+		[pcb+i+1]=-1;
+		endif;
+	i=i+2;		
+	endwhile;
+	SP=3*512;
+	[[PTBR+6]*512]=0;
+	ireturn;
+endif;

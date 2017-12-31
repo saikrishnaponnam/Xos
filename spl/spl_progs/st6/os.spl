@@ -1,0 +1,69 @@
+//multi programming
+
+load(7,1);
+load(8,2);
+
+load(9,3);
+load(10,4);
+
+load(11,5);
+load(12,6);
+
+load(23,17);
+load(24,18);
+
+[READY_LIST+0]=0;
+
+load(25,21);
+load(26,22);
+load(27,23);
+
+PTBR=1024;
+PTLR=4;
+
+[PTBR+0]=25;
+[PTBR+1]="01";
+[PTBR+2]=26;
+[PTBR+3]="01";
+[PTBR+4]=27;
+[PTBR+5]="01";
+[PTBR+6]=28;
+[PTBR+7]="01";
+
+[READY_LIST+1]=2;
+
+SP=3*512;
+[28*512]=0;
+
+breakpoint;
+
+//ireturn;
+
+[READY_LIST+32]=1;		//II process PID to 1 exec process
+
+load(29,25);			// LOADING II PROCESS TO MEMORY
+
+alias PTBR_PROCESS S0;		
+PTBR_PROCESS = 1024+1*8;	// STARTING PTBR OF II PROCESS
+
+[PTBR_PROCESS+0]=29;		// SETTING PAGETABLE FOR II PROCESS
+[PTBR_PROCESS+1]="01";
+[PTBR_PROCESS+2]=-1;
+[PTBR_PROCESS+3]="00";
+[PTBR_PROCESS+4]=-1;
+[PTBR_PROCESS+5]="00";
+[PTBR_PROCESS+6]=30;
+[PTBR_PROCESS+7]="01";
+
+[READY_LIST+33]=1;		// setting II process state to ready	
+
+[READY_LIST+37]=PTBR_PROCESS;	// SETTING PTBR VALUE IN PCB OF II PROCESS
+[READY_LIST+38]=4;		//PTLR
+
+[READY_LIST+34]=3*512;		//SP
+[READY_LIST+35]=3*512;		//BP
+
+[READY_LIST+36]=0;		//IP
+breakpoint;
+
+ireturn;

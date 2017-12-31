@@ -1,0 +1,97 @@
+alias physicalsp S0;
+physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+
+alias syscallno S1;		//getting systemcall no. from stack
+syscallno=[physicalsp-1];
+
+alias arg1 S2;
+arg1=[physicalsp-3];
+
+alias i S3;
+i=0;
+
+
+if(syscallno==2) then					//Open
+	i=0;	
+	while(i<64&&[FAT+i*8]!=arg1) do			//checking for file in FAT
+		i=i+1;
+	endwhile;
+	if(i==64) then
+		print "FILE DOESN'T EXIST";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	alias fileindex S4;
+	fileindex=i;
+	i=0;
+	while(i<128&&[FILE_TABLE+i]!=fileindex) do	//checking for file in system wide open filetable
+		i=i+2;
+	endwhile;
+	alias opentableindex S5;
+	if(i<128) then
+		opentableindex=i/2;			//if already in
+	else
+		i=0;
+		while(i<128&&[FILE_TABLE+i]!=-1) do	//finding a free entry in openwide file table
+		i=i+2;
+		endwhile;
+		if(i==128) then
+			print "FILE TABLE FULL";
+			[physicalsp-2]=-1;
+			ireturn;
+		endif;
+		opentableindex=i/2;
+	endif;
+	alias processid S6;
+	processid=(PTBR-1024)/8;
+	alias pcb S7;
+	pcb=READY_LIST+(processid*32);
+	i=15;
+	while(i<31&&[pcb+i]!=-1) do
+		i=i+2;
+	endwhile;
+	if(i==31) then
+		print "NO SPACE IN PPT";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	[pcb+i]=opentableindex;
+	[pcb+i+1]=0;
+	[FILE_TABLE+(opentableindex*2)]=fileindex;		
+	[FILE_TABLE+(opentableindex*2)+1]=[FILE_TABLE+(opentableindex*2)+1]+1;
+	[physicalsp-2]=(i-15)/2;
+	ireturn;
+endif;
+
+if(syscallno==3) then				//close
+	if(arg1<0||arg1>7) then			//validating argument
+		print "INVALID FDESCRIPTOR";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	arg1=15+(arg1*2);
+	alias processpid S4;
+	processpid=(PTBR-1024)/8;
+	alias pcb S5;
+	pcb=READY_LIST+(processpid*32);
+	if([pcb+arg1]==-1) then			//checking if entry in perprocess Ftable is valid
+		print "INVALID ARGUMENT";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	alias opentableindex S6;	
+	opentableindex=FILE_TABLE+([pcb+arg1]*2);	//here opentableindex is actually opentablepointer 	
+	if([opentableindex]==-1) then
+		print "NO FTABLE ENTRY";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	[opentableindex+1]=[opentableindex+1]-1; //decreasing open count
+	if([opentableindex+1]==0) then
+		[opentableindex]=-1;
+	endif;
+	[pcb+arg1]=-1;
+	[pcb+arg1+1]=-1;
+	[physicalsp-2]=0;
+	ireturn;
+endif;

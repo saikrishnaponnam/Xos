@@ -1,0 +1,107 @@
+alias cause S0;
+cause=EFR%10;
+alias vpagenum S1;
+vpagenum=(EFR/10)%100;
+alias ip_addr S2;
+ip_addr=(EFR/1000);
+
+if(cause!=0) then					//if cause is not 0 it is not pagefault
+	breakpoint;	
+	if(cause == 1) then
+		print("Illegal Instruction");
+	endif;
+	if(cause ==2) then
+		print("Illegal Memory");
+	endif;
+	if(cause == 3) then
+		print("Division by zero");
+	endif;
+	if(cause == 4) then
+		print("Illegal operands");
+	endif;
+	alias physicalsp S3;
+	SP=SP+1;
+	physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+	[physicalsp-1]=10;
+	inline "JMP 11776";
+endif;
+
+alias i S3;
+alias pgnum S4;
+alias j S5;
+
+if(cause==0) then						
+	if([PTBR+vpagenum*2]==-1) then					//if physicalpagenumber is -1 exit
+		print ("Invalid Vpage");		
+		alias physicalsp S3;
+		SP=SP+1;
+		physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+		[physicalsp-1]=10;
+		inline "JMP 11776";
+	endif;
+	i=0;
+	while(i<64&&[MEM_LIST+i]!=0) do					//checking memory to allocate a page
+		i=i+1;
+	endwhile;
+	if(i<64) then
+		[MEM_LIST+i]=1;						//if free page allocate it
+		pgnum=i;
+	else
+		i=PTBR+(vpagenum*2);					//no free page page replacement 
+		while(1) do
+			if(i>1279) then
+				i=PAGE_TABLE;
+			endif;
+			if((i+2)%8==0) then
+				i=i+2;
+				continue;
+			endif;
+			if([i+1]=="01") then				//page with reference bit 0 is selected
+				if([MEM_LIST+[i]]==1) then
+					pgnum=[i];
+				break;
+				endif;
+			endif;
+			if([i+1]=="11") then
+				[i+1]="01";
+			endif;
+			i=i+2;
+		endwhile;
+		j=448;
+		while(j<512) do						//finding a free block in swap space
+			if([DISK_LIST+j]==0) then
+				[DISK_LIST+j]=1;
+				store(pgnum,j);				//store page in swap
+				[i]=j;
+				[i+1]="00";
+				store(6,20);
+				break;
+			endif;
+			j=j+1;
+		endwhile;
+		if(j>=512) then
+			print("NO FREESWAP");
+			alias physicalsp S6;
+			SP=SP+1;
+			physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+			[physicalsp-1]=10;
+			inline "JMP 11776";
+		endif;
+	endif;
+	if([PTBR+vpagenum*2]<448) then					//if actual page is in disk
+		j=[PTBR+vpagenum*2];
+		load(pgnum,j);
+	else
+		j=[PTBR+vpagenum*2];					//if actual page is in swap
+		load(pgnum,j);
+		[DISK_LIST+j]=[DISK_LIST+j]-1;
+		store(6,20);
+	endif;
+	[PTBR+vpagenum*2]=pgnum;
+	[PTBR+vpagenum*2+1]="11";
+	SP=SP+1;
+	alias physicalsp S6;
+	physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+	[physicalsp]=ip_addr;
+	ireturn;
+endif;

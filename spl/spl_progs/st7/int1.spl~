@@ -1,0 +1,59 @@
+alias physicalsp S0;
+physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+
+alias syscallno S1;		//getting systemcall no. from stack
+syscallno=[physicalsp-1];
+
+alias arg1 S2;
+arg1=[physicalsp-3];
+
+alias i S3;
+i=0;
+
+if(syscallno==1) then		
+	while(i<64) do				//checking if file is already in FAT
+		if([FAT+i*8]==arg1) then
+			print "FILE EXIST";
+			[physicalsp-2]=0;
+			ireturn;
+		endif;
+	i=i+1;
+	endwhile;
+	i=24;
+	while(i<448&&[DISK_LIST+i]!=0) do	//finding a free block for basicblock
+		i=i+1;
+	endwhile;
+	if(i==448) then
+		print"NO FREE BLOCK";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	alias basicblock S4;
+	basicblock=i;
+	i=0;
+	while(i<64&&[FAT+(i*8)+2]!=-1) do	//checking for a free FAT entry
+		i=i+1;
+	endwhile;
+	if(i==64) then
+		[physicalsp-2]=-1;			
+		ireturn;
+	endif;
+	alias fatentry S5;			
+	fatentry=FAT+(i*8);
+	[fatentry+0]=arg1;
+	[fatentry+1]=0;
+	[fatentry+2]=basicblock;
+	load(1,basicblock);			//loading basicblock to scratchpad
+	i=512;
+	while(i<1024) do			//intialise to words in basicblock -1
+	[i]=-1;
+	i=i+1;
+	endwhile;
+	store(1,basicblock);
+	[DISK_LIST+basicblock]=1;
+	store(5,19);				//storing back fat and dfl
+	store(6,20);
+	[physicalsp-2]=0;
+	ireturn;
+endif;
+

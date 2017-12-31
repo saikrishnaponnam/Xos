@@ -1,0 +1,28 @@
+// checking interupt 7 and exhandler and loading init as user program
+
+load(7,1);		// loading interupt 7
+load(8,2);
+load(23,17);		// loading exhandler
+load(24,18);
+[READY_LIST+0]=0;	// to set the pid of init process to 0.
+load(25,21);		// loading init process to memory
+load(26,22);
+load(27,23);
+PTBR=1024;		// page table for init process (PID*8) gives the index of page table of a process.
+PTLR=4;			// in xos page table entry of every process have 4 entries.
+[PTBR+0]=25;		// first word of each page has physical address[.
+[PTBR+1]="01";		// reference bit & validity bit.
+[PTBR+2]=26;
+[PTBR+3]="01";
+[PTBR+4]=27;
+[PTBR+5]="01";
+[PTBR+6]=28;		// stack
+[PTBR+7]="01";
+[READY_LIST+1]=2;	// state of init process is set to running
+			// remaining fields need not be filled
+breakpoint;
+SP=3*512;		// runtime-stack starts at logical address 1536 and extends upto 2047.
+[28*512]=0;		// setting top of stack to logical address to 0 before switching to user mode, so that ip will be set to 0 
+breakpoint;
+ireturn;
+

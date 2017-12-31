@@ -1,0 +1,100 @@
+alias physicalsp S0;
+physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+
+alias syscall S1;
+syscall=[physicalsp-1];
+
+alias i S2;
+i=0;
+
+if(syscall==8) then					//FORK syscall
+	alias newpid S3;
+	while(i<32&&[READY_LIST+(i*32)+1]!=0) do	//finding free pcb
+		i=i+1;
+	endwhile;
+	if(i==32) then
+		print "NO FREE PCB";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	newpid=i;
+	[READY_LIST+i*32]=i;
+	//alias c S4;
+	//while(i<8) do					//no. of valid pages for process
+	//	if([PTBR+i]!=-1) then
+	//		c=c+1;
+	//	endif;
+	//	i=i+2;
+	//endwhile;
+	//alias j S5;
+	//j=c;
+	i=MEM_LIST+24;
+	while(i<1344&&[i]!=0) do			//checking for a page for stack
+		i=i+1;
+	endwhile;
+	if(i==1344) then
+		print "NO FREE MEM";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	alias stack S4;
+	stack=i-MEM_LIST;
+	[i]=1;
+	i=0;
+	while(i<512) do					//copying stack
+		[stack*512+i]=[[PTBR+6]*512+i];
+		i=i+1;
+	endwhile;
+	alias newptbr S8;				 
+	newptbr=1024+(newpid)*8;
+	[newptbr+6]=stack;				//pagetable for stack
+	[newptbr+7]="01";
+	i=0;
+	while(i<6) do					//copying pagetables
+		[newptbr+i]=[PTBR+i];
+		[newptbr+i+1]=[PTBR+i+1];
+		if([PTBR+i+1]=="11"||[PTBR+i+1]=="01") then
+			[MEM_LIST+[PTBR+i]]=[MEM_LIST+[PTBR+i]]+1;
+		else
+			if([PTBR+i]>447) then
+				[DISK_LIST+[PTBR+i]]=[DISK_LIST+[PTBR+i]]+1;
+			endif;
+		endif;
+		i=i+2;			
+	endwhile;
+	store(6,20);
+	alias newpcb S10;				//copying registers
+	newpcb=READY_LIST+(newpid*32);
+	[newpcb+1]=1;	
+	[newpcb+2]=BP;	
+	[newpcb+3]=SP-1;	
+	[newpcb+4]=[physicalsp];
+	[newpcb+5]=newptbr;
+	[newpcb+6]=PTLR;
+	[newpcb+7]=R0;
+	[newpcb+8]=R1;
+	[newpcb+9]=R2;
+	[newpcb+10]=R3;
+	[newpcb+11]=R4;
+	[newpcb+12]=R5;
+	[newpcb+13]=R6;
+	[newpcb+14]=R7;
+	alias pid S4;
+	pid=(PTBR-1024)/8;
+	alias pcb S5;
+	pcb=READY_LIST+(pid*32);
+	i=15;
+	while(i<31) do					//copying perprocess file table
+		[newpcb+i]=[pcb+i];
+		[newpcb+i+1]=[pcb+i+1];
+		if([pcb+i]!=-1) then
+			[FILE_TABLE+2*[pcb+i]+1]=[FILE_TABLE+2*[pcb+i]+1]+1;
+		endif;
+		i=i+2;
+	endwhile;
+	[physicalsp-2]=newpid;
+	alias cphysicalsp S11;
+	cphysicalsp=([newptbr+2*((SP-1)/512)]*512)+((SP-1)%512);
+	[cphysicalsp-1]=-2;
+	ireturn;	
+endif;

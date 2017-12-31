@@ -1,0 +1,89 @@
+alias physicalsp S0;
+physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+
+alias syscall S1;
+syscall=[physicalsp-1];
+
+
+alias i S3;
+i=0;
+
+if(syscall==9) then					//EXEC syscall
+	alias arg S2;
+	arg=[physicalsp-3];
+	i=FAT;
+	while(i<3072&&[i]!=arg) do			//checking for argument file in FAT
+		i=i+8;
+	endwhile;
+	if(i==3072) then
+		print"NO FILE";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	alias basicblock S4;
+	basicblock=[i+2];
+	load(1,basicblock);
+	i=0;
+	while(i<6) do					//pagetable decrementing entries of pages/blocks in disk_list 
+		if([PTBR+i+1]=="11"||[PTBR+i+1]=="01") then
+			[MEM_LIST+[PTBR+i]]=[MEM_LIST+[PTBR+i]]-1;
+		else
+			if([PTBR+i]>447) then
+				[DISK_LIST+[PTBR+i]]=[DISK_LIST+[PTBR+i]]-1;
+			endif;
+		endif;
+		i=i+2;
+	endwhile;
+	i=512;
+	alias j S5;
+	j=0;
+	while(i<1024&&j<6) do				//filing Pagetable
+		if([i]!=-1&&[i]!="") then
+			[PTBR+j]=[i];
+			[PTBR+j+1]="00";
+			j=j+2;
+		endif;
+		i=i+1;
+	endwhile;
+	while(j<6) do
+		[PTBR+j]=-1;
+		[PTBR+j+1]="00";
+		j=j+2;
+	endwhile;
+	alias pid S8;
+	pid=(PTBR-1024)/8;
+	alias pcb S9;
+	alias temp S10;
+	pcb=READY_LIST+(pid*32);			//closing files opened by process
+	while(i<31) do
+		if([pcb+i]!=-1) then
+		temp=FILE_TABLE+([pcb+i]*2);
+		[temp+1]=[temp+1]-1;
+		if([temp+1]==0) then
+			[temp]=-1;
+		endif;	
+		[pcb+i]=-1;
+		[pcb+i+1]=-1;
+		endif;
+	i=i+2;		
+	endwhile;
+	SP=3*512;
+	[[PTBR+6]*512]=0;
+	ireturn;
+endif;
+
+if(syscall==11) then
+	alias pid S3;
+	pid=(PTBR-1024)/8;
+	[physicalsp-2]=pid;
+	ireturn;
+endif;
+
+if(syscall==12) then
+	alias pid S3;
+	pid=(PTBR-1024)/8;
+	alias pcb S4;
+	pcb=READY_LIST+(pid*32);
+	[physicalsp-2]=[pcb+31];
+	ireturn;
+endif;

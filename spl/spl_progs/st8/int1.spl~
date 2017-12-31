@@ -1,0 +1,115 @@
+alias physicalsp S0;
+physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+
+alias syscallno S1;		//getting systemcall no. from stack
+syscallno=[physicalsp-1];
+
+alias arg1 S2;
+arg1=[physicalsp-3];
+
+alias i S3;
+i=0;
+
+if(syscallno==1) then		
+	while(i<64) do				//checking if file is already in FAT
+		if([FAT+i*8]==arg1) then
+			print "FILE EXIST";
+			[physicalsp-2]=0;
+			ireturn;
+		endif;
+	i=i+1;
+	endwhile;
+	i=24;
+	while(i<448&&[DISK_LIST+i]!=0) do	//finding a free block for basicblock
+		i=i+1;
+	endwhile;
+	if(i==448) then
+		print"NO FREE BLOCK";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	alias basicblock S4;
+	basicblock=i;
+	i=0;
+	while(i<64&&[FAT+(i*8)+2]!=-1) do	//checking for a free FAT entry
+		i=i+1;
+	endwhile;
+	if(i==64) then
+		print "NO FREE FAT ENTRY";
+		[physicalsp-2]=-1;			
+		ireturn;
+	endif;
+	alias fatentry S5;			
+	fatentry=FAT+(i*8);
+	[fatentry+0]=arg1;
+	[fatentry+1]=0;
+	[fatentry+2]=basicblock;
+	load(1,basicblock);			//loading basicblock to scratchpad
+	i=512;
+	while(i<1024) do			//intialise to words in basicblock -1
+	[i]=-1;
+	i=i+1;
+	endwhile;
+	store(1,basicblock);
+	[DISK_LIST+basicblock]=1;
+	store(5,19);				//storing back fat and dfl
+	store(6,20);
+	[physicalsp-2]=0;
+	ireturn;
+endif;
+
+if(syscallno==4) then
+	while(i<64&&[FAT+i*8]!=arg1) do			//checking for file in fat
+		i=i+1;
+	endwhile;
+	if(i==64) then 					
+		print "FILE DOESN'T EXIST";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	alias fileindex S4;
+	fileindex=i;
+	i=0;
+	while(i<128) do					//check SWOFT if file is open
+		if([FILE_TABLE+i]==fileindex) then
+			print"FILE IS OPENED CAN'T DELETE";
+			[physicalsp-2]=-1;
+			ireturn;
+		endif;
+		i=i+2;
+	endwhile;
+	alias basicblock S5;
+	basicblock=[FAT+(fileindex*8)+2];
+	alias datablock S6;
+	alias j S7;
+	i=0;
+	while(i<512) do					//erasing datablocks
+		load(1,basicblock);
+		datablock=[SCRATCHPAD+i];
+		if(datablock!=-1) then
+			load(1,datablock);
+			j=0;
+			while(j<512) do
+				[SCRATCHPAD+j]="";
+				j=j+1;
+			endwhile;
+			store(1,datablock);
+			[DISK_LIST+datablock]=0;
+		endif;
+		i=i+1;
+	endwhile;
+	i=0;
+	load(1,basicblock);
+	while(i<512) do					//erasing basicblock
+		[SCRATCHPAD+i]=-1;
+		i=i+1;
+	endwhile;
+	store(1,basicblock);
+	[DISK_LIST+basicblock]=0;			//invalidating FAT entry
+	[FAT+(fileindex*8)]=-1;
+	[FAT+(fileindex*8)+2]=-1;
+	store(5,19);
+	store(6,20);
+	[physicalsp-2]=0;
+	ireturn;
+endif;

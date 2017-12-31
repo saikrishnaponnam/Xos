@@ -1,0 +1,65 @@
+// it is xos scheduler
+
+alias current_pid S0;		// FINDING PID OF CURRENT PROCESS
+current_pid=(PTBR-1024)/8;
+
+alias currentpcb S1;
+currentpcb=READY_LIST+32*current_pid;
+
+[currentpcb+1]=1;		// current process state to 1 i.e. ready
+[currentpcb+2]=BP;		// stroing current values of registers in pcb
+[currentpcb+3]=SP-1;		// when interupt occurs ip is stored in top of stack and sp is increased by 1 so we store sp-1
+
+alias physicalsp S2;
+physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+
+[currentpcb+4]=[physicalsp];	// IP is in top of stack save it in pcb
+[currentpcb+5]=PTBR;
+[currentpcb+6]=PTLR;
+
+[currentpcb+7]=R0;		// saving user registers
+[currentpcb+8]=R1;
+[currentpcb+9]=R2;
+[currentpcb+10]=R3;
+[currentpcb+11]=R4;
+[currentpcb+12]=R5;
+[currentpcb+13]=R6;
+[currentpcb+14]=R7;
+
+alias next_pcb S3;
+next_pcb=currentpcb+32;
+
+if(next_pcb>2559) then
+	next_pcb=READY_LIST;
+endif;
+
+while([next_pcb+1]!=1) do		//RoundRobin
+	next_pcb=next_pcb+32;
+	if(next_pcb>2559) then
+		next_pcb=READY_LIST;
+	endif;
+endwhile;
+
+
+[next_pcb+1]=2;		
+BP=[next_pcb+2];
+SP=[next_pcb+3];
+
+PTBR=[next_pcb+5];
+PTLR=[next_pcb+6];
+
+R0=[next_pcb+7];
+R1=[next_pcb+8];
+R2=[next_pcb+9];
+R3=[next_pcb+10];
+R4=[next_pcb+11];
+R5=[next_pcb+12];
+R6=[next_pcb+13];
+R7=[next_pcb+14];
+
+SP=SP+1;			// before ireturn IP value must be stored in top of stack
+alias newphysicalsp S2;
+newphysicalsp = ([PTBR+2*(SP/512)]*512)+(SP%512);
+[newphysicalsp]=[next_pcb+4];
+
+ireturn;

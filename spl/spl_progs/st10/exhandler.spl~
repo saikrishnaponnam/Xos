@@ -1,0 +1,17 @@
+alias cause S0;
+cause=EFR%10;
+alias vpagenum S1;
+vpagenum=(EFR/10)%100;
+alias ip_addr S2;
+ip_addr=(EFR/1000);
+
+if(cause!=0) then
+	print"NOT PFAULT";
+	alias physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+	[physicalsp-1]=10;
+	inline "jmp 11776";
+endif;
+
+
+
+

@@ -1,0 +1,83 @@
+alias physicalsp S0;
+physicalsp=([PTBR+2*(SP/512)]*512)+(SP%512);
+
+alias syscallno S1;
+syscallno=[physicalsp-1];
+
+alias arg1 S2;			//newLSEEK for Seek or wordread for Read 
+arg1=[physicalsp-3];
+
+alias arg2 S3;			//file descriptor
+arg2=[physicalsp-4];
+
+alias i S4;
+
+if(syscallno==6) then			//SEEK syscall 
+	if(arg2<0||arg2>7) then
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	arg2=15+(arg2*2);
+	alias processid S5;
+	processid=(PTBR-1024)/8;
+	alias pcb S6;
+	pcb=READY_LIST+(processid*32);
+	if([pcb+arg2]==-1) then			//validating PPFT entry
+		print "INVALID FDESCRIPTOR";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;	
+	alias opentableindex S7;
+	opentableindex=[pcb+arg2];
+	alias fileindex S8;
+	fileindex=[FILE_TABLE+opentableindex*2];
+	alias filesize S9;
+	filesize=[FAT+(fileindex*8)+1];
+	if(arg1>filesize) then			//if argument LSeek is > filesize invalid
+		print "INVALID LSEEK";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;	
+	[pcb+arg2+1]=arg1;
+	[physicalsp-2]=0;
+	ireturn;
+endif;
+
+if(syscallno==7) then			//READ syscall
+	if(arg2<0||arg2>7) then
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	arg2=(arg2*2)+15;
+	alias processid S5;
+	processid=(PTBR-1024)/8;
+	alias pcb S6;
+	pcb=READY_LIST+(processid*32);
+	if([pcb+arg2]==-1) then
+		print "INVALID FDESCRIPTOR";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;	
+	alias opentableindex S7;
+	opentableindex=[pcb+arg2];
+	alias lseek S8;	
+	lseek=[pcb+arg2+1];
+	alias fileindex S9;
+	fileindex=[FILE_TABLE+opentableindex*2];
+	alias basicblock S10;
+	basicblock=[FAT+(fileindex*8)+2];
+	if(lseek==[FAT+(fileindex*8)+1]) then	//if LSeek is greater than file size invalid
+		print "INVALID LSEEK";
+		[physicalsp-2]=-1;
+		ireturn;
+	endif;
+	load(1,basicblock);
+	alias datablock S11;
+	datablock=[SCRATCHPAD+(lseek/512)];
+	load(1,datablock);
+	arg1=[SCRATCHPAD+(lseek%512)];
+	[physicalsp-3]=arg1;			//storing word to be read in stack
+	[pcb+arg2+1]=lseek+1;
+	[physicalsp-2]=0;
+	ireturn;	
+endif;
