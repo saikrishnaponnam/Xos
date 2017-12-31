@@ -1,0 +1,23 @@
+decl
+	integer n,i,c,j;
+enddecl
+
+integer main(){
+	print("Enter n:");	
+	read(n);
+	i=2;
+	while(i<n) do
+	j=2;c=0;
+		while(j<=i/2) do
+		if(i%j==0) then
+		c=1;
+		endif;
+		j=j+1;
+		endwhile;
+	if(c==0) then
+	print(i);
+	endif;
+	i=i+1;
+	endwhile;
+	return 0;
+}
